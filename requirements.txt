@@ -1,0 +1,6 @@
+streamlit
+pymupdf
+python-docx
+openai
+neo4j
+pydantic
