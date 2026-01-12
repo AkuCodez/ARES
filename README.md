@@ -56,3 +56,39 @@ ARES is an AI-powered interview platform that analyzes a candidate’s resume, g
 
 ## 🧩 System Architecture
 
+Resume Upload
+↓
+Resume Parsing & Skill Extraction
+↓
+Skill-Based Question Generator
+↓
+Candidate Answer
+↓
+LLM-Based Evaluation (Concepts + Quality)
+↓
+Adaptive Depth & Termination Logic
+↓
+Final Interview Summary & Hiring Recommendation
+
+
+---
+
+## 🧪 How Adaptive Interview Works
+
+ARES does not ask a fixed number of questions.
+
+The interview ends when:
+- The candidate shows consistent strength (e.g., two “Strong” answers in a row)
+- The same concept is repeatedly missed (indicating a knowledge gap)
+- Or a hard question limit is reached
+
+This mimics how real interviewers probe depth and stop when sufficient signal is obtained.
+
+---
+
+## ▶️ Running Locally
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/your-username/ARES.git
+cd ARES```
