@@ -1,9 +1,13 @@
 # resume_engine/skill_extractor.py
 
-import json
 from openai import OpenAI
+import streamlit as st
+import os
+import json
 
-client = OpenAI()
+api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key)
+
 
 SYSTEM_PROMPT = """
 You are a senior technical interviewer and resume analyzer.
