@@ -88,7 +88,7 @@ This mimics how real interviewers probe depth and stop when sufficient signal is
 
 ## ▶️ Running Locally
 
-### 1. Clone the repository
+###  Clone the repository
 ```bash
 git clone https://github.com/your-username/ARES.git
-cd ARES```
+cd ARES
