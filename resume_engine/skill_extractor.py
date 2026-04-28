@@ -1,12 +1,7 @@
 # resume_engine/skill_extractor.py
 
 from resume_engine.llm_client import client, MODEL
-import streamlit as st
-import os
 import json
-
-api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-
 
 SYSTEM_PROMPT = """
 You are a senior technical interviewer and resume analyzer.
@@ -19,11 +14,11 @@ DO NOT add markdown, backticks, or explanations.
     "<skill_name>": {
       "confidence": <float between 0 and 1>,
       "depth_estimate": "Beginner | Intermediate | Advanced | Expert",
-      "evidence": [<list of strings>]
+      "evidence": [<list of strings describing where this skill was used>]
     }
   },
-  "projects": [<list of strings>],
-  "risk_flags": [<list of strings>]
+  "projects": [<list of project name strings>],
+  "risk_flags": [<list of warning strings>]
 }
 
 Rules:
@@ -33,12 +28,12 @@ Rules:
 """
 
 def clean_json_output(text: str) -> str:
-    """
-    Defensive cleaning in case model returns markdown accidentally
-    """
+    """Strip markdown code fences if model accidentally adds them."""
     text = text.strip()
     if text.startswith("```"):
         text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
     return text.strip()
 
 def extract_skills(resume_text: str) -> dict:
@@ -49,7 +44,7 @@ def extract_skills(resume_text: str) -> dict:
             {"role": "user", "content": resume_text}
         ],
         temperature=0.2,
-        response_format={"type": "json_object"}  # 🔒 FORCE JSON
+        response_format={"type": "json_object"}
     )
 
     content = response.choices[0].message.content
