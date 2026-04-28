@@ -1,12 +1,11 @@
 # resume_engine/skill_extractor.py
 
-from openai import OpenAI
+from resume_engine.llm_client import client, MODEL
 import streamlit as st
 import os
 import json
 
 api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=api_key)
 
 
 SYSTEM_PROMPT = """
@@ -44,7 +43,7 @@ def clean_json_output(text: str) -> str:
 
 def extract_skills(resume_text: str) -> dict:
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": resume_text}

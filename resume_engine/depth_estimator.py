@@ -1,11 +1,9 @@
-from openai import OpenAI
+from resume_engine.llm_client import client, MODEL
 import json
-
-client = OpenAI()
 
 def estimate_skill_depth(skill_name, evidence_text):
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=MODEL,
         messages=[
             {"role": "system", "content": DEPTH_PROMPT},
             {

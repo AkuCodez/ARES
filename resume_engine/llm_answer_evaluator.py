@@ -1,9 +1,7 @@
 # resume_engine/llm_answer_evaluator.py
 
 import json
-from openai import OpenAI
-
-client = OpenAI()
+from resume_engine.llm_client import client, MODEL
 
 SYSTEM_PROMPT = """
 You are a senior technical interviewer.
@@ -29,7 +27,7 @@ Rules:
 
 def evaluate_with_llm(skill: str, question: str, answer: str) -> dict:
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {

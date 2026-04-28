@@ -1,9 +1,7 @@
 # resume_engine/concept_bootstrapper.py
 
 import json
-from openai import OpenAI
-
-client = OpenAI()
+from resume_engine.llm_client import client, MODEL
 
 SYSTEM_PROMPT = """
 You are a senior technical interviewer.
@@ -18,7 +16,7 @@ Return JSON only:
 
 def bootstrap_concepts(skill: str) -> list:
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Skill: {skill}"}
