@@ -4,3 +4,4 @@ python-docx
 openai
 neo4j
 pydantic
+python-dotenv
