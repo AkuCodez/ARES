@@ -6,7 +6,7 @@ from collections import Counter
 
 from resume_engine.run_pipeline import run
 from resume_engine.question_generator import generate_question
-from resume_engine.answer_evaluator import evaluate_answer
+from resume_engine.evaluator import evaluate_answer
 from resume_engine.next_question_policy import decide_next_level
 
 # ------------------ CONFIG ------------------
