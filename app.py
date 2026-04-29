@@ -126,8 +126,8 @@ if uploaded_file:
     with st.expander("📊 Skill Analysis"):
         for skill, info in profile.skills.items():
             st.write(f"**{skill}**")
-            st.write(f"- Confidence: {info.confidence}")
-            st.write(f"- Depth: {info.depth_estimate}")
+            st.write(f"- Confidence: {info.get('confidence', 0)}")
+            st.write(f"- Depth: {info.get('depth_estimate', 'N/A')}")
 
     # ------------------ CHAT INTERVIEW ------------------
     st.header("🎤 Interactive Interview")
