@@ -110,6 +110,12 @@ _DEPTH_DELTA: dict = {
 _MIN_DEPTH = 1
 _MAX_DEPTH = 3
 
+def _safe_depth(depth) -> int:
+    """Convert any depth value to a valid int between 1 and 3."""
+    try:
+        return max(1, min(int(depth), 3))
+    except (ValueError, TypeError):
+        return 1
 
 def decide_next_level(current_depth: int, quality: str) -> int:
     """
@@ -122,6 +128,7 @@ def decide_next_level(current_depth: int, quality: str) -> int:
     Returns:
         New depth level, clamped between 1 and 3
     """
+    current_depth      = _safe_depth(current_depth)
     quality_normalised = quality.strip().lower()
     delta  = _DEPTH_DELTA.get(quality_normalised, 0)
     new_depth = current_depth + delta

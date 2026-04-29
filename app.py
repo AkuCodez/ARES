@@ -221,6 +221,7 @@ if uploaded_file:
             st.rerun()
 
         # ---- Decide Next Depth ----
+        interview_state.depth_level = int(interview_state.depth_level)  
         interview_state.depth_level = decide_next_level(
             interview_state.depth_level,
             quality
