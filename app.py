@@ -5,7 +5,7 @@ import time
 from collections import Counter
 
 from resume_engine.run_pipeline import run
-from resume_engine.question_generator import generate_question
+from resume_engine.questions import generate_question, select_skill_for_question
 from resume_engine.evaluator import evaluate_answer
 from resume_engine.next_question_policy import decide_next_level
 
@@ -44,8 +44,8 @@ def cached_run(resume_bytes):
 
 
 @st.cache_data(show_spinner=False)
-def cached_generate_question(skill, depth, asked):
-    return generate_question(skill, depth, tuple(asked))
+def cached_generate_question(skill, depth, asked, profile=None):
+    return generate_question(skill, depth, tuple(asked), profile)
 
 
 # ------------------ ADAPTIVE STOPPING LOGIC ------------------
@@ -117,7 +117,8 @@ if uploaded_file:
         st.session_state.current_question = cached_generate_question(
             interview_state.current_skill,
             interview_state.depth_level,
-            interview_state.asked_questions
+            interview_state.asked_questions,
+            profile
         )
 
     # ------------------ Skill Analysis ------------------
