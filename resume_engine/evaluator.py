@@ -12,8 +12,8 @@ import json
 from typing import Dict, List
 
 from resume_engine.llm_client import client, MODEL
-from resume_engine.skill_concepts import SKILL_CONCEPTS
-from resume_engine.dynamic_concept_store import load_dynamic_concepts
+from resume_engine.skills import get_concepts_for_skill
+
 
 
 # ─────────────────────────────────────────────
@@ -80,8 +80,8 @@ def analyze_concepts(skill: str, answer: str) -> dict:
             "missing":   list[str]        # concepts they missed
         }
     """
-    dynamic  = load_dynamic_concepts()
-    concepts = SKILL_CONCEPTS.get(skill) or dynamic.get(skill)
+    concepts = get_concepts_for_skill(skill)
+
 
     if not concepts:
         return {"coverage": None, "mentioned": [], "missing": []}
