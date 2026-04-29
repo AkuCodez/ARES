@@ -7,7 +7,7 @@ from collections import Counter
 from resume_engine.run_pipeline import run
 from resume_engine.questions import generate_question, select_skill_for_question
 from resume_engine.evaluator import evaluate_answer
-from resume_engine.next_question_policy import decide_next_level
+from resume_engine.policy import decide_next_level
 
 # ------------------ CONFIG ------------------
 MAX_QUESTIONS = 6          # hard cap
