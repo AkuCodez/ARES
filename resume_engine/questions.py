@@ -42,7 +42,21 @@ _TEMPLATES: dict = {
 
 
 # ─────────────────────────────────────────────
-# 2. Personalized LLM question generator  ← the upgrade
+# 2. Depth sanitizer
+#    Guards against strings like "Beginner", "foundation", "1" etc.
+#    being passed in as depth — always returns a clean int 1-3.
+# ─────────────────────────────────────────────
+
+def _safe_depth(depth) -> int:
+    """Convert any depth value to a valid int between 1 and 3."""
+    try:
+        return max(1, min(int(depth), 3))
+    except (ValueError, TypeError):
+        return 1  # default to conceptual level
+
+
+# ─────────────────────────────────────────────
+# 3. Personalized LLM question generator
 #    Reads the candidate's actual projects + evidence from the profile
 #    and generates a question that references their real work.
 # ─────────────────────────────────────────────
@@ -87,26 +101,23 @@ def _build_resume_context(skill: str, profile: Optional[dict]) -> str:
 
     lines = [f"Skill being tested: {skill}"]
 
-    # Projects
     projects = profile.get("projects", [])
     if projects:
         lines.append(f"Candidate's projects: {', '.join(projects)}")
 
-    # Evidence for this specific skill
     skills_data = profile.get("skills", {})
     skill_info  = skills_data.get(skill, {})
     evidence    = skill_info.get("evidence", [])
-    depth       = skill_info.get("depth_estimate", "Unknown")
+    depth_label = skill_info.get("depth_estimate", "Unknown")
     confidence  = skill_info.get("confidence", 0)
 
     if evidence:
         lines.append(f"Evidence for {skill}:")
-        for e in evidence[:4]:   # cap at 4 to stay token-efficient
+        for e in evidence[:4]:
             lines.append(f"  - {e}")
 
-    lines.append(f"Claimed depth: {depth}  |  Confidence score: {confidence:.0%}")
+    lines.append(f"Claimed depth: {depth_label}  |  Confidence score: {confidence:.0%}")
 
-    # Risk flags (overclaims) — helps interviewer probe harder if suspicious
     flags = profile.get("risk_flags", [])
     skill_flags = [f for f in flags if skill.lower() in f.lower()]
     if skill_flags:
@@ -140,7 +151,7 @@ def _generate_with_llm(
                 )
             }
         ],
-        temperature=0.7,           # some creativity so questions don't feel robotic
+        temperature=0.7,
         response_format={"type": "json_object"}
     )
 
@@ -148,25 +159,25 @@ def _generate_with_llm(
     return data.get("question", "").strip()
 
 
-def _fallback_question(skill: str, depth: int, asked: tuple) -> str:
+def _fallback_question(skill: str, depth, asked: tuple) -> str:
     """
     Template fallback used when LLM fails.
-    Picks a random template at the right depth that hasn't been asked yet.
+    Picks a random unused template at the right depth level.
     """
-    depth_clamped = max(1, min(depth, 3))
-    pool = _TEMPLATES[depth_clamped]
-    formatted = [t.format(skill=skill) for t in pool]
-    unused = [q for q in formatted if q not in asked]
+    depth_clamped = _safe_depth(depth)
+    pool          = _TEMPLATES[depth_clamped]
+    formatted     = [t.format(skill=skill) for t in pool]
+    unused        = [q for q in formatted if q not in asked]
     return random.choice(unused) if unused else formatted[0]
 
 
 # ─────────────────────────────────────────────
-# 3. Main entry point — this is what app.py calls
+# 4. Main entry point — called by app.py
 # ─────────────────────────────────────────────
 
 def generate_question(
     skill: str,
-    depth: int,
+    depth,
     asked: tuple,
     profile: Optional[dict] = None
 ) -> str:
@@ -176,18 +187,22 @@ def generate_question(
     Args:
         skill:   Skill being tested e.g. "Python", "Machine Learning"
         depth:   1 (conceptual) → 2 (applied) → 3 (deep internals)
+                 Accepts int or str — sanitized internally via _safe_depth.
         asked:   Tuple of question strings already asked (to avoid repeats)
         profile: Full extracted resume profile dict. When provided, questions
-                 are personalized to the candidate's actual projects and evidence.
+                 are personalized to the candidate's actual projects.
 
     Returns:
         A single interview question string.
     """
+    depth = _safe_depth(depth)   # sanitize once — protects both LLM and fallback paths
+
     try:
         question = _generate_with_llm(skill, depth, asked, profile)
         if question and question.endswith("?"):
             return question
         # LLM returned something malformed — fall through to template
+        print(f"[questions] LLM returned malformed question for '{skill}', using fallback")
     except Exception as e:
         print(f"[questions] LLM generation failed for '{skill}': {e}")
 
@@ -195,9 +210,7 @@ def generate_question(
 
 
 # ─────────────────────────────────────────────
-# 4. Skill selector
-#    Decides which skill to interview on next, based on the profile
-#    and interview history (avoids repeating the same skill too many times)
+# 5. Skill selector
 # ─────────────────────────────────────────────
 
 def select_skill_for_question(profile: dict, history: list) -> str:
@@ -207,27 +220,16 @@ def select_skill_for_question(profile: dict, history: list) -> str:
     Strategy (in priority order):
       1. Skills with evidence in projects (not just listed on resume)
       2. Skills that haven't been asked about yet
-      3. Skills where the candidate's last answer was "weak" (re-probe)
-      4. Skills with highest confidence score (most likely to yield a useful signal)
-
-    Falls back to a random skill from the profile if nothing else matches.
-
-    Args:
-        profile: Extracted resume profile with skills + evidence
-        history: Interview history list from InterviewState
-
-    Returns:
-        Skill name string
+      3. Skills where the candidate last answered "weak" (re-probe)
+      4. Highest confidence skill overall as final fallback
     """
     skills_data = profile.get("skills", {})
 
     if not skills_data:
-        return "Python"     # safe default if profile extraction failed
+        return "Python"
 
-    # Skills already covered in this interview
     asked_skills = {turn.get("skill") for turn in history if "skill" in turn}
 
-    # Build candidate list: prefer skills with project evidence
     evidenced = {
         skill: info
         for skill, info in skills_data.items()
@@ -235,21 +237,20 @@ def select_skill_for_question(profile: dict, history: list) -> str:
     }
     pool = evidenced if evidenced else skills_data
 
-    # Priority 1: skills not yet asked, with evidence
+    # Priority 1: unasked skills with evidence, ranked by confidence
     unasked = {s: i for s, i in pool.items() if s not in asked_skills}
     if unasked:
-        # Among unasked, pick the one with highest confidence (strongest signal)
         return max(unasked, key=lambda s: unasked[s].get("confidence", 0))
 
-    # Priority 2: skill where candidate was weakest (re-probe for fairness)
+    # Priority 2: re-probe last weak skill
     weak_turns = [
-        turn for turn in history
-        if turn.get("quality", {}).get("quality") == "weak"
+        t for t in history
+        if t.get("quality", {}).get("quality") == "weak"
     ]
     if weak_turns:
         last_weak_skill = weak_turns[-1].get("skill")
         if last_weak_skill and last_weak_skill in skills_data:
             return last_weak_skill
 
-    # Priority 3: fallback — highest confidence skill overall
+    # Priority 3: highest confidence overall
     return max(pool, key=lambda s: pool[s].get("confidence", 0))
