@@ -8,6 +8,8 @@ from resume_engine.run_pipeline import run
 from resume_engine.questions import generate_question, select_skill_for_question
 from resume_engine.evaluator import evaluate_answer
 from resume_engine.policy import decide_next_level
+from resume_engine.models import InterviewState
+
 
 # ------------------ CONFIG ------------------
 MAX_QUESTIONS = 6          # hard cap
@@ -33,7 +35,6 @@ def typewriter(text, delay=TYPE_DELAY):
         time.sleep(delay)
 
 # ------------------ CACHED HELPERS ------------------
-@st.cache_data(show_spinner=False)
 def cached_run(resume_bytes):
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
         tmp.write(resume_bytes)
@@ -63,10 +64,10 @@ def should_end_interview(history):
     if n >= MAX_QUESTIONS:
         return True
 
-    verdicts = [turn["quality"]["quality"] for turn in history]
+    verdicts = [turn["quality"]["quality"].lower() for turn in history]
 
     # ---- Rule 2: Two strong answers in a row ----
-    if n >= 2 and verdicts[-1] == "Strong" and verdicts[-2] == "Strong":
+    if n >= 2 and verdicts[-1] == "strong" and verdicts[-2] == "strong":
         return True
 
     # ---- Rule 3: Confidence stabilized (same verdict twice) ----
@@ -181,9 +182,9 @@ if uploaded_file:
                 st.write(f"⚠️ {c} ({n} times)")
 
         st.subheader("🏁 Final Verdict")
-        if verdict_counts.get("Strong", 0) >= 2:
+        if verdict_counts.get("strong", 0) >= 2:
             st.success("Hire Recommendation: **Strong Yes**")
-        elif verdict_counts.get("Strong", 0) == 1:
+        elif verdict_counts.get("strong", 0) == 1:
             st.warning("Hire Recommendation: **Borderline**")
         else:
             st.error("Hire Recommendation: **Needs Improvement**")
@@ -230,7 +231,8 @@ if uploaded_file:
         st.session_state.current_question = cached_generate_question(
             interview_state.current_skill,
             interview_state.depth_level,
-            interview_state.asked_questions
+            interview_state.asked_questions,
+            profile
         )
 
         st.rerun()

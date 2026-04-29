@@ -2,12 +2,11 @@
 
 from resume_engine.extract_text import extract_text_from_pdf
 from resume_engine.skill_extractor import extract_skills
-from resume_engine.schema import ResumeProfile
 from resume_engine.skills import classify_skill
 from resume_engine.evaluator import evaluate_answer, detect_overclaims, analyze_concepts
 from resume_engine.questions import generate_question, select_skill_for_question
-from resume_engine.interview_state import InterviewState
 from resume_engine.policy import decide_next_level, compute_confidence, estimate_skill_depth
+from resume_engine.models import ResumeProfile, InterviewState
 
 
 def run(resume_path: str):
