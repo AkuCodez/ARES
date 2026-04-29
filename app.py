@@ -35,7 +35,7 @@ def typewriter(text, delay=TYPE_DELAY):
         time.sleep(delay)
 
 # ------------------ CACHED HELPERS ------------------
-def cached_run(resume_bytes):
+def cached_run(resume_bytes, suffix:str):
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
         tmp.write(resume_bytes)
         path = tmp.name
@@ -101,7 +101,10 @@ if uploaded_file:
     if "profile" not in st.session_state:
         with st.spinner("Analyzing resume and preparing interview..."):
             try:
-                profile, interview_state = cached_run(uploaded_file.getvalue())
+                suffix = Path(uploaded_file.name).suffix.lower()
+                profile, interview_state = cached_run(
+                    uploaded_file.getvalue(),
+                    suffix)
             except ValueError as e:
                 st.error(str(e))
                 st.info("Tip: If your resume is scanned, try uploading a text-based PDF or a DOCX file.")
