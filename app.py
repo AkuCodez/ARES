@@ -3,6 +3,7 @@ import tempfile
 import os
 import time
 from collections import Counter
+from pathlib import Path
 
 from resume_engine.run_pipeline import run
 from resume_engine.questions import generate_question, select_skill_for_question
