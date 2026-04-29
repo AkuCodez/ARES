@@ -153,7 +153,7 @@ def _fallback_question(skill: str, depth: int, asked: tuple) -> str:
     Template fallback used when LLM fails.
     Picks a random template at the right depth that hasn't been asked yet.
     """
-    depth_clamped = max(1, min(int(depth), 3))
+    depth_clamped = max(1, min(depth, 3))
     pool = _TEMPLATES[depth_clamped]
     formatted = [t.format(skill=skill) for t in pool]
     unused = [q for q in formatted if q not in asked]
