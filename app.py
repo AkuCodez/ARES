@@ -36,7 +36,8 @@ def typewriter(text, delay=TYPE_DELAY):
 
 # ------------------ CACHED HELPERS ------------------
 def cached_run(resume_bytes):
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+    suffix = ".docx" if uploaded_file.name.endswith(".docx") else ".pdf"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(resume_bytes)
         path = tmp.name
     profile, interview_state = run(path)
