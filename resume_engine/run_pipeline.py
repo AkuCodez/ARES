@@ -1,5 +1,6 @@
 # resume_engine/run_pipeline.py
 
+from resume_engine import skills
 from resume_engine.extract_text import extract_text
 from resume_engine.skill_extractor import extract_skills
 from resume_engine.skills import classify_skill
@@ -58,4 +59,11 @@ def run(resume_path: str):
         depth_level=starting_depth
     )
 
+    # run_pipeline.py — after building state, ADD:
+    top_skills = sorted(
+        skills.keys(),
+        key=lambda s: skills[s].get("confidence", 0),
+        reverse=True
+    )[:3]
+    state.skill_queue = top_skills
     return profile, state

@@ -83,6 +83,8 @@ class InterviewState:
         self.turn            = 0
         self.history         = []
         self.asked_questions = set()
+        self.skill_queue     = []   # top skills to rotate through
+        self.questions_per_skill = {}  # track how many Qs asked per skill
 
     @classmethod
     def _parse_depth(cls, depth) -> int:
@@ -114,6 +116,17 @@ class InterviewState:
         })
         self.asked_questions.add(question)
         self.turn += 1
+    
+    def advance_skill(self) -> bool:
+        """Move to next skill in queue. Returns False if queue exhausted."""
+        self.questions_per_skill[self.current_skill] = \
+            self.questions_per_skill.get(self.current_skill, 0) + 1
+        remaining = [s for s in self.skill_queue if s != self.current_skill]
+        if remaining:
+            self.current_skill = remaining[0]
+            self.skill_queue   = remaining
+            return True
+        return False
 
     # ── Convenience properties ─────────────────────────────────────────────
 

@@ -217,6 +217,13 @@ if uploaded_file:
             answer,
             evaluation
         )
+        
+        questions_on_skill = sum(
+            1 for t in interview_state.history
+            if t.get("skill") == interview_state.current_skill
+        )
+        if questions_on_skill >= 2 and len(interview_state.skill_queue) > 1:
+            interview_state.advance_skill()
 
         # ---- Adaptive Termination Check ----
         if should_end_interview(interview_state.history):
