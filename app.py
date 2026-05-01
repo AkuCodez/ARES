@@ -35,7 +35,7 @@ def typewriter(text, delay=TYPE_DELAY):
         time.sleep(delay)
 
 # ------------------ CACHED HELPERS ------------------
-def cached_run(resume_bytes, suffix:str):
+def cached_run(resume_bytes):
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
         tmp.write(resume_bytes)
         path = tmp.name
