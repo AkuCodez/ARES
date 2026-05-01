@@ -1,6 +1,6 @@
 # resume_engine/run_pipeline.py
 
-from resume_engine.extract_text import extract_resume_text
+from resume_engine.extract_text import extract_text_from_pdf
 from resume_engine.skill_extractor import extract_skills
 from resume_engine.skills import classify_skill
 from resume_engine.evaluator import evaluate_answer, detect_overclaims, analyze_concepts
@@ -11,7 +11,7 @@ from resume_engine.models import ResumeProfile, InterviewState
 
 def run(resume_path: str):
     # ── 1. Extract raw text from PDF ──────────────────────────────────────
-    resume_text = extract_resume_text(resume_path)
+    resume_text = extract_text_from_pdf(resume_path)
 
     # ── 2. Extract skills + projects from resume text via LLM ─────────────
     raw_profile = extract_skills(resume_text)

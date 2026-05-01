@@ -3,7 +3,6 @@ import tempfile
 import os
 import time
 from collections import Counter
-from pathlib import Path
 
 from resume_engine.run_pipeline import run
 from resume_engine.questions import generate_question, select_skill_for_question
@@ -102,10 +101,8 @@ if uploaded_file:
     if "profile" not in st.session_state:
         with st.spinner("Analyzing resume and preparing interview..."):
             try:
-                suffix = Path(uploaded_file.name).suffix.lower()
                 profile, interview_state = cached_run(
-                    uploaded_file.getvalue(),
-                    suffix)
+                    uploaded_file.getvalue())
             except ValueError as e:
                 st.error(str(e))
                 st.info("Tip: If your resume is scanned, try uploading a text-based PDF or a DOCX file.")
