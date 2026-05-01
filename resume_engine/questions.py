@@ -254,3 +254,37 @@ def select_skill_for_question(profile: dict, history: list) -> str:
 
     # Priority 3: highest confidence overall
     return max(pool, key=lambda s: pool[s].get("confidence", 0))
+
+# questions.py — ADD this function
+
+_FOLLOWUP_PROMPT = """
+You are a technical interviewer. The candidate just answered a question
+but missed some key concepts. Ask ONE sharp follow-up question that
+specifically probes the missing concept — don't reveal the answer.
+
+Return JSON ONLY: {"question": "<follow-up question>"}
+"""
+
+def generate_followup(skill: str, missing_concepts: list, last_answer: str) -> str:
+    """Generate a targeted follow-up for missed concepts."""
+    if not missing_concepts:
+        return None
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": _FOLLOWUP_PROMPT},
+                {"role": "user", "content":
+                    f"Skill: {skill}\n"
+                    f"Missing concepts: {', '.join(missing_concepts[:3])}\n"
+                    f"Candidate's last answer: {last_answer}"
+                }
+            ],
+            temperature=0.5,
+            response_format={"type": "json_object"}
+        )
+        data = json.loads(response.choices[0].message.content)
+        return data.get("question", "").strip() or None
+    except Exception as e:
+        print(f"[questions] follow-up generation failed: {e}")
+        return None

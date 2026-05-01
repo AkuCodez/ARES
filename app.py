@@ -237,7 +237,19 @@ if uploaded_file:
         )
 
         # ---- Next Question ----
-        st.session_state.current_question = cached_generate_question(
+
+        missing = evaluation.get("concepts", {}).get("missing", [])
+        followup = None
+
+        if missing and quality != "strong":
+            from resume_engine.questions import generate_followup
+            followup = generate_followup(
+                interview_state.current_skill,
+                missing,
+                answer
+            )
+
+        st.session_state.current_question = followup or cached_generate_question(
             interview_state.current_skill,
             interview_state.depth_level,
             interview_state.asked_questions,
