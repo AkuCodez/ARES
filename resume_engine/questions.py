@@ -90,12 +90,26 @@ Return JSON ONLY:
 }
 """
 
+def _extract_jd_skills(jd_text: str) -> list:
+    """Pull key required skills from a job description."""
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content":
+                    "Extract the top 5 technical skills required by this job description. "
+                    "Return JSON ONLY: {\"skills\": [\"skill1\", ...]}"
+                },
+                {"role": "user", "content": jd_text}
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"}
+        )
+        return json.loads(response.choices[0].message.content).get("skills", [])
+    except Exception:
+        return []
 
-def _build_resume_context(skill: str, profile: Optional[dict]) -> str:
-    """
-    Extract the relevant slice of the profile for this skill
-    so the LLM prompt stays focused and token-efficient.
-    """
+def _build_resume_context(skill: str, profile: Optional[dict], jd_text=None) -> str:
     if not profile:
         return f"Skill being tested: {skill}\nNo resume context available."
 
@@ -123,17 +137,27 @@ def _build_resume_context(skill: str, profile: Optional[dict]) -> str:
     if skill_flags:
         lines.append(f"⚠ Risk flags: {'; '.join(skill_flags)}")
 
+    # ── JD context ───────────────────────────────────────────────────────
+    if jd_text:
+        jd_skills = _extract_jd_skills(jd_text)
+        if jd_skills:
+            lines.append(f"Job requires: {', '.join(jd_skills)}")
+            lines.append("Prioritize questions relevant to the job requirements above.")
+
     return "\n".join(lines)
+
+
 
 
 def _generate_with_llm(
     skill: str,
     depth: int,
     asked: tuple,
-    profile: Optional[dict]
+    profile: Optional[dict],
+    jd_text = None
 ) -> str:
     """Call LLM to generate a personalised interview question."""
-    resume_context = _build_resume_context(skill, profile)
+    resume_context = _build_resume_context(skill, profile, jd_text)
     asked_list     = list(asked)
 
     response = client.chat.completions.create(
@@ -179,7 +203,8 @@ def generate_question(
     skill: str,
     depth,
     asked: tuple,
-    profile: Optional[dict] = None
+    profile: Optional[dict] = None,
+    jd_text= None
 ) -> str:
     """
     Generate one interview question for a given skill and depth.
@@ -255,8 +280,6 @@ def select_skill_for_question(profile: dict, history: list) -> str:
     # Priority 3: highest confidence overall
     return max(pool, key=lambda s: pool[s].get("confidence", 0))
 
-# questions.py — ADD this function
-
 _FOLLOWUP_PROMPT = """
 You are a technical interviewer. The candidate just answered a question
 but missed some key concepts. Ask ONE sharp follow-up question that
@@ -288,3 +311,5 @@ def generate_followup(skill: str, missing_concepts: list, last_answer: str) -> s
     except Exception as e:
         print(f"[questions] follow-up generation failed: {e}")
         return None
+    
+# questions.py — ADD this, and pass jd_context into _build_resume_context

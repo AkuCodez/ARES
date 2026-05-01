@@ -25,6 +25,19 @@ st.set_page_config(
 st.title("🧠 ARES – AI Resume-Based Interview System")
 st.caption("Upload a resume and experience a realistic AI-driven technical interview")
 
+# app.py — ADD after st.caption(...)
+
+with st.expander("🎯 Optional: Paste a Job Description to tailor the interview"):
+    jd_text = st.text_area(
+        "Job Description",
+        placeholder="Paste the JD here...",
+        height=150,
+        key="jd_input"
+    )
+    if jd_text and "jd_text" not in st.session_state:
+        st.session_state.jd_text = jd_text
+        st.success("✅ JD saved — interview will be tailored to this role")
+
 # ------------------ TYPING EFFECT ------------------
 def typewriter(text, delay=TYPE_DELAY):
     placeholder = st.empty()
@@ -46,8 +59,8 @@ def cached_run(resume_bytes):
 
 
 @st.cache_data(show_spinner=False)
-def cached_generate_question(skill, depth, asked, profile=None):
-    return generate_question(skill, depth, tuple(asked), profile)
+def cached_generate_question(skill, depth, asked, profile=None, jd_text = None):
+    return generate_question(skill, depth, tuple(asked), profile, jd_text)
 
 
 # ------------------ ADAPTIVE STOPPING LOGIC ------------------
@@ -121,7 +134,8 @@ if uploaded_file:
             interview_state.current_skill,
             interview_state.depth_level,
             interview_state.asked_questions,
-            profile
+            profile,
+            st.session_state.get("jd_text")
         )
 
     # ------------------ Skill Analysis ------------------
@@ -253,7 +267,8 @@ if uploaded_file:
             interview_state.current_skill,
             interview_state.depth_level,
             interview_state.asked_questions,
-            profile
+            profile,
+            st.session_state.get("jd_text")
         )
 
         st.rerun()
