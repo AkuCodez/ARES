@@ -4,6 +4,7 @@ import os
 import time
 from collections import Counter
 
+from resume_engine.report import generate_report
 from resume_engine.run_pipeline import run
 from resume_engine.questions import generate_question, select_skill_for_question
 from resume_engine.evaluator import evaluate_answer
@@ -13,7 +14,7 @@ from resume_engine.models import InterviewState
 
 # ------------------ CONFIG ------------------
 MAX_QUESTIONS = 6          # hard cap
-MIN_QUESTIONS = 2          # minimum before early stop
+MIN_QUESTIONS = 3          # minimum before early stop
 TYPE_DELAY = 0.03          # typing speed
 
 # ------------------ Page Setup ------------------
@@ -37,6 +38,23 @@ with st.expander("🎯 Optional: Paste a Job Description to tailor the interview
     if jd_text and "jd_text" not in st.session_state:
         st.session_state.jd_text = jd_text
         st.success("✅ JD saved — interview will be tailored to this role")
+        
+# after JD expander block
+# REPLACE entire persona block in app.py with:
+
+if "persona" not in st.session_state:
+    st.subheader("🎭 Choose Interviewer Style")
+    persona_choice = st.selectbox(
+        "Style",
+        ["😊 Friendly", "🏢 FAANG", "🚀 Startup", "🎓 Academic"],
+        key="persona_select"
+    )
+    if st.button("Confirm Style"):
+        st.session_state.persona = persona_choice
+        st.rerun()
+    st.stop()   # ← blocks resume upload until persona is picked
+else:
+    st.info(f"🎭 Interviewer: **{st.session_state.persona}**")
 
 # ------------------ TYPING EFFECT ------------------
 def typewriter(text, delay=TYPE_DELAY):
@@ -59,9 +77,44 @@ def cached_run(resume_bytes):
 
 
 @st.cache_data(show_spinner=False)
-def cached_generate_question(skill, depth, asked, profile=None, jd_text = None):
-    return generate_question(skill, depth, tuple(asked), profile, jd_text)
+def cached_generate_question(skill, depth, asked, profile=None, jd_text = None, persona = None):
+    return generate_question(skill, depth, tuple(asked), profile, jd_text, persona)
 
+# app.py — ADD this function near top with other helpers
+
+def render_radar_chart(history):
+    import plotly.graph_objects as go
+
+    dims = ["correctness", "depth", "clarity"]
+    scores = {d: [] for d in dims}
+
+    for turn in history:
+        s = turn.get("quality", {}).get("scores", {})
+        for d in dims:
+            if d in s:
+                scores[d].append(s[d])
+
+    avg = [
+        (sum(scores[d]) / len(scores[d]) / 10) if scores[d] else 0
+        for d in dims
+    ]
+
+    fig = go.Figure(go.Scatterpolar(
+        r=avg + [avg[0]],
+        theta=["Correctness", "Depth", "Clarity", "Correctness"],
+        fill="toself",
+        line_color="#7C3AED",
+        fillcolor="rgba(124, 58, 237, 0.2)"
+    ))
+    fig.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
+        showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=40, r=40, t=40, b=40),
+        height=350
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 # ------------------ ADAPTIVE STOPPING LOGIC ------------------
 def should_end_interview(history):
@@ -84,11 +137,7 @@ def should_end_interview(history):
     if n >= 2 and verdicts[-1] == "strong" and verdicts[-2] == "strong":
         return True
 
-    # ---- Rule 3: Confidence stabilized (same verdict twice) ----
-    if n >= 2 and verdicts[-1] == verdicts[-2]:
-        return True
-
-    # ---- Rule 4: Repeated missing concepts ----
+    # ---- Rule 3: Repeated missing concepts ----
     missing = []
     for turn in history:
         concepts = turn["quality"].get("concepts")
@@ -121,6 +170,7 @@ if uploaded_file:
                 st.error(str(e))
                 st.info("Tip: If your resume is scanned, try uploading a text-based PDF or a DOCX file.")
                 st.stop()
+            st.cache_data.clear()
             st.session_state.profile = profile
             st.session_state.interview_state = interview_state
             st.session_state.interview_complete = False
@@ -135,7 +185,8 @@ if uploaded_file:
             interview_state.depth_level,
             interview_state.asked_questions,
             profile,
-            st.session_state.get("jd_text")
+            st.session_state.get("jd_text"),
+            st.session_state.get("persona")
         )
 
     # ------------------ Skill Analysis ------------------
@@ -161,6 +212,7 @@ if uploaded_file:
             concepts = turn["quality"].get("concepts")
             if concepts and concepts.get("missing"):
                 st.warning("Missing concepts: " + ", ".join(concepts["missing"]))
+                
 
     # ------------------ FINAL SUMMARY ------------------
     if st.session_state.interview_complete:
@@ -186,6 +238,9 @@ if uploaded_file:
         st.subheader("📊 Performance Breakdown")
         for k, v in verdict_counts.items():
             st.write(f"- **{k}**: {v}")
+            
+        st.subheader("🕸️ Skill Radar")
+        render_radar_chart(interview_state.history)
 
         if mentioned_counts:
             st.subheader("💪 Strong Concepts")
@@ -198,13 +253,22 @@ if uploaded_file:
                 st.write(f"⚠️ {c} ({n} times)")
 
         st.subheader("🏁 Final Verdict")
+        
         if verdict_counts.get("strong", 0) >= 2:
             st.success("Hire Recommendation: **Strong Yes**")
         elif verdict_counts.get("strong", 0) == 1:
             st.warning("Hire Recommendation: **Borderline**")
         else:
             st.error("Hire Recommendation: **Needs Improvement**")
-
+            
+        st.divider()
+        pdf_bytes = generate_report(profile, interview_state)
+        st.download_button(
+            label="📄 Download Interview Report (PDF)",
+            data=pdf_bytes,
+            file_name="ARES_Interview_Report.pdf",
+            mime="application/pdf"
+        )
         st.stop()
 
     # ---- Current Question (Typing Effect) ----
@@ -268,7 +332,8 @@ if uploaded_file:
             interview_state.depth_level,
             interview_state.asked_questions,
             profile,
-            st.session_state.get("jd_text")
+            st.session_state.get("jd_text"),
+            st.session_state.get("persona")
         )
 
         st.rerun()

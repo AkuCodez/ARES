@@ -40,6 +40,13 @@ _TEMPLATES: dict = {
     ],
 }
 
+# ADD near top of questions.py
+_PERSONAS = {
+    "🏢 FAANG":    "You are a rigorous FAANG interviewer. Be direct, technical, unforgiving. Probe edge cases and system design. No hand-holding.",
+    "🚀 Startup":  "You are a startup CTO. Ask broad, fast questions. Care about shipping speed, creativity, and culture fit alongside technical depth.",
+    "🎓 Academic": "You are a CS professor. Focus on theory, first principles, time/space complexity, and formal definitions.",
+    "😊 Friendly": "You are a supportive senior engineer. Encourage the candidate, give hints if they struggle, keep tone warm and collaborative.",
+}
 
 # ─────────────────────────────────────────────
 # 2. Depth sanitizer
@@ -154,26 +161,25 @@ def _generate_with_llm(
     depth: int,
     asked: tuple,
     profile: Optional[dict],
-    jd_text = None
+    jd_text = None,
+    persona = None
 ) -> str:
     """Call LLM to generate a personalised interview question."""
     resume_context = _build_resume_context(skill, profile, jd_text)
+    persona_line   = _PERSONAS.get(persona, _PERSONAS["😊 Friendly"])
     asked_list     = list(asked)
 
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": _QUESTION_PROMPT},
-            {
-                "role": "user",
-                "content": (
-                    f"{resume_context}\n\n"
-                    f"Depth level: {depth}\n"
-                    f"Already asked (do NOT repeat these):\n"
-                    + ("\n".join(f"  - {q}" for q in asked_list) if asked_list
-                       else "  None yet")
-                )
-            }
+            {"role": "system", "content": persona_line},   
+            {"role": "user",   "content": (
+                f"{_QUESTION_PROMPT}\n\n"                  
+                f"{resume_context}\n\n"
+                f"Depth level: {depth}\n"
+                f"Already asked:\n"
+                + ("\n".join(f"  - {q}" for q in list(asked)) or "  None yet")
+            )}
         ],
         temperature=0.7,
         response_format={"type": "json_object"}
@@ -204,7 +210,8 @@ def generate_question(
     depth,
     asked: tuple,
     profile: Optional[dict] = None,
-    jd_text= None
+    jd_text= None,
+    persona = None
 ) -> str:
     """
     Generate one interview question for a given skill and depth.
@@ -223,7 +230,7 @@ def generate_question(
     depth = _safe_depth(depth)   # sanitize once — protects both LLM and fallback paths
 
     try:
-        question = _generate_with_llm(skill, depth, asked, profile)
+        question = _generate_with_llm(skill, depth, asked, profile, jd_text, persona)
         if question and question.endswith("?"):
             return question
         # LLM returned something malformed — fall through to template

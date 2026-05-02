@@ -6,3 +6,5 @@ neo4j
 pydantic
 python-dotenv
 python-docx
+plotly
+reportlab
