@@ -10,6 +10,8 @@ from resume_engine.questions import generate_question, select_skill_for_question
 from resume_engine.evaluator import evaluate_answer
 from resume_engine.policy import decide_next_level
 from resume_engine.models import InterviewState
+from resume_engine.questions import generate_hint
+from resume_engine.evaluator import apply_hint_penalty
 
 
 # ------------------ CONFIG ------------------
@@ -314,17 +316,31 @@ if uploaded_file:
     with st.chat_message("assistant"):
         typewriter(st.session_state.current_question)
 
+    if st.button("💡 Hint", key=f"hint_{interview_state.turn}"):
+        hint = generate_hint(
+            interview_state.current_skill,
+            st.session_state.current_question
+        )
+        st.session_state.hint_used = True
+        st.session_state.current_hint = hint
+
+    if st.session_state.get("current_hint"):
+        st.info(f"💡 {st.session_state.current_hint}")
+            
     # ---- User Input ----
     answer = st.chat_input("Type your answer here...")
 
     if answer:
-
+        st.session_state.current_hint = None 
         with st.spinner("Evaluating your answer..."):
             evaluation = evaluate_answer(
                 interview_state.current_skill,
                 st.session_state.current_question,
                 answer
             )
+        if st.session_state.get("hint_used"):
+            evaluation = apply_hint_penalty(evaluation)
+            st.session_state.hint_used = False  
 
         quality = evaluation["quality"]
 

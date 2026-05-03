@@ -181,3 +181,13 @@ def detect_overclaims(profile: Dict) -> List[str]:
             )
 
     return red_flags
+
+
+def apply_hint_penalty(evaluation: dict) -> dict:
+    """Reduce clarity score by 2 if hint was used."""
+    evaluation = dict(evaluation)
+    scores = dict(evaluation.get("scores", {}))
+    scores["clarity"] = max(0, scores.get("clarity", 0) - 2)
+    evaluation["scores"] = scores
+    evaluation["feedback"] = "[Hint used] " + evaluation.get("feedback", "")
+    return evaluation

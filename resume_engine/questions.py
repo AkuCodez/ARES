@@ -62,6 +62,30 @@ technical chat. Keep tone warm. If candidate struggles, rephrase or
 give a small hint. Celebrate good answers. Make them feel comfortable.""",
 }
 
+# ADD to questions.py
+
+_HINT_PROMPT = """
+You are a helpful interviewer giving a subtle hint.
+Give ONE short hint (1-2 sentences) that nudges toward the answer
+WITHOUT revealing it directly.
+Return JSON ONLY: {"hint": "<hint text>"}
+"""
+
+def generate_hint(skill: str, question: str) -> str:
+    """Generate a subtle hint for the current question."""
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": _HINT_PROMPT},
+                {"role": "user", "content": f"Skill: {skill}\nQuestion: {question}"}
+            ],
+            temperature=0.4,
+            response_format={"type": "json_object"}
+        )
+        return json.loads(response.choices[0].message.content).get("hint", "")
+    except Exception:
+        return "Think about the core concept and a real example from your experience."
 # ─────────────────────────────────────────────
 # 2. Depth sanitizer
 #    Guards against strings like "Beginner", "foundation", "1" etc.
