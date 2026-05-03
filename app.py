@@ -12,6 +12,8 @@ from resume_engine.policy import decide_next_level
 from resume_engine.models import InterviewState
 from resume_engine.questions import generate_hint
 from resume_engine.evaluator import apply_hint_penalty
+from resume_engine.anticheat import detect_cheating
+from resume_engine.skill_gaps import generate_skill_gaps
 
 
 # ------------------ CONFIG ------------------
@@ -251,6 +253,10 @@ if uploaded_file:
             if concepts and concepts.get("missing"):
                 st.warning("Missing concepts: " + ", ".join(concepts["missing"]))
                 
+            cheat = turn["quality"].get("cheat_flags")
+            if cheat and cheat["risk"] != "low":
+                st.caption(f"⚠️ {cheat['risk'].upper()} risk: {', '.join(cheat['flags'])}")
+                
 
     # ------------------ FINAL SUMMARY ------------------
     if st.session_state.interview_complete:
@@ -302,6 +308,39 @@ if uploaded_file:
         else:
             st.error("Hire Recommendation: **Needs Improvement**")
             
+        st.subheader("📚 Personalized Study Recommendations")
+        with st.spinner("Generating recommendations..."):
+            gaps = generate_skill_gaps(interview_state.history, vars(profile))
+        interview_state.gaps = gaps
+
+        _PRIORITY_CONFIG = {
+            "high":   ("🔴 High Priority",   "error"),
+            "medium": ("🟡 Medium Priority", "warning"),
+            "low":    ("🟢 Nice to Have",    "info"),
+        }
+
+        for i, gap in enumerate(gaps, 1):
+            priority                  = gap.get("priority", "medium")
+            priority_label, box_type  = _PRIORITY_CONFIG.get(priority, _PRIORITY_CONFIG["medium"])
+
+            with st.expander(f"{priority_label} — {gap['topic']}", expanded=(priority == "high")):
+                
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown(f"**Why this matters:**  \n{gap.get('reason', '')}")
+                    st.markdown(f"**What to focus on:**  \n{gap.get('what_to_learn', '')}")
+                    st.markdown(f"**Priority explained:**  \n_{gap.get('priority_reason', '')}_")
+                with col2:
+                    st.metric("Time needed", gap.get("estimated_time", "?"))
+
+                resource_name = gap.get("resource_name", "Resource")
+                resource_url  = gap.get("resource_url", "#")
+                st.markdown(f"📖 **[{resource_name}]({resource_url})**")
+
+                # visual priority bar
+                bar_val = {"high": 1.0, "medium": 0.6, "low": 0.3}.get(priority, 0.5)
+                st.progress(bar_val, text=f"Career impact: {priority_label}")
+        
         st.divider()
         pdf_bytes = generate_report(profile, interview_state)
         st.download_button(
@@ -344,6 +383,12 @@ if uploaded_file:
 
         quality = evaluation["quality"]
 
+        cheat_result = detect_cheating(answer, interview_state.depth_level)
+        if cheat_result["flagged"]:
+            evaluation["cheat_flags"] = cheat_result
+            if cheat_result["risk"] == "high":
+                st.warning(f"⚠️ Authenticity check: {', '.join(cheat_result['flags'])}")
+                
         # Record turn
         interview_state.record(
             st.session_state.current_question,

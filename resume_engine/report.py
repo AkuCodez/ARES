@@ -216,6 +216,21 @@ def generate_report(profile, interview_state) -> bytes:
         ]))
         story.append(concept_table)
         story.append(Spacer(1, 16))
+        
+    if gaps := getattr(interview_state, "gaps", None):
+        story.append(Paragraph("Study Recommendations", h2_style))
+        for gap in gaps:
+            priority_colors = {"high": _RED, "medium": _YELLOW, "low": _GREEN}
+            c = priority_colors.get(gap.get("priority", "medium"), _YELLOW)
+            story.append(Paragraph(
+                f"<b>{gap['topic']}</b> — {gap['reason']}",
+                ParagraphStyle("GapTitle", fontSize=10, textColor=c, fontName="Helvetica-Bold")
+            ))
+            story.append(Paragraph(
+                f"Resource: {gap.get('resource_name', '')} — {gap.get('resource_url', '')}",
+                body_style
+            ))
+            story.append(Spacer(1, 6))
 
     # ── Q&A transcript ─────────────────────────────────────────────────────
     story.append(Paragraph("Interview Transcript", h2_style))
@@ -248,6 +263,13 @@ def generate_report(profile, interview_state) -> bytes:
             width="100%", thickness=0.5,
             color=_GREY, spaceBefore=8, spaceAfter=8
         ))
+        
+        cheat = turn["quality"].get("cheat_flags")
+        if cheat and cheat.get("flagged"):
+            story.append(Paragraph(
+                f"⚠ Authenticity risk: {cheat['risk'].upper()} — {', '.join(cheat['flags'])}",
+                ParagraphStyle("Cheat", fontSize=8, textColor=_RED, fontName="Helvetica")
+            ))  
 
     # ── Footer ─────────────────────────────────────────────────────────────
     story.append(Spacer(1, 12))
