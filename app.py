@@ -115,6 +115,42 @@ def render_radar_chart(history):
         height=350
     )
     st.plotly_chart(fig, use_container_width=True)
+    
+# ADD this function near render_radar_chart at top:
+
+def render_confidence_timeline(history):
+    import plotly.graph_objects as go
+
+    _SCORE_MAP = {"strong": 1.0, "okay": 0.5, "weak": 0.0}
+    turns  = list(range(1, len(history) + 1))
+    scores = [_SCORE_MAP.get(t["quality"]["quality"].lower(), 0) for t in history]
+    skills = [t.get("skill", "") for t in history]
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=turns, y=scores,
+        mode="lines+markers",
+        line=dict(color="#7C3AED", width=3),
+        marker=dict(size=10, color=scores, colorscale=[
+            [0, "#DC2626"], [0.5, "#D97706"], [1, "#16A34A"]
+        ]),
+        text=[f"Q{i}: {s}" for i, s in zip(turns, skills)],
+        hovertemplate="%{text}<br>Score: %{y}<extra></extra>"
+    ))
+    fig.update_layout(
+        xaxis=dict(title="Question #", tickvals=turns),
+        yaxis=dict(
+            title="Performance",
+            tickvals=[0, 0.5, 1.0],
+            ticktext=["Weak", "Okay", "Strong"],
+            range=[-0.1, 1.1]
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=40, r=40, t=20, b=40),
+        height=300
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 # ------------------ ADAPTIVE STOPPING LOGIC ------------------
 def should_end_interview(history):
@@ -241,6 +277,9 @@ if uploaded_file:
             
         st.subheader("🕸️ Skill Radar")
         render_radar_chart(interview_state.history)
+        
+        st.subheader("📈 Confidence Timeline")
+        render_confidence_timeline(interview_state.history)
 
         if mentioned_counts:
             st.subheader("💪 Strong Concepts")
