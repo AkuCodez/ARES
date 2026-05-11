@@ -8,3 +8,6 @@ python-dotenv
 python-docx
 plotly
 reportlab
+streamlit-javascript
+audio-recorder-streamlit
+groq

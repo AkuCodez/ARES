@@ -648,9 +648,126 @@ if uploaded_file:
     if st.session_state.get("current_hint"):
         st.info(f"💡 {st.session_state.current_hint}")
 
-    # Answer input
-    answer = st.chat_input("Your answer...")
+    # ── INPUT MODE SELECTOR ───────────────────────────────────────────────
+    st.markdown("""
+    <style>
+    .mode-bar { display:flex; gap:8px; margin-bottom:1rem; }
+    .mode-btn {
+        flex:1; padding:0.6rem 1rem; border-radius:10px; cursor:pointer;
+        font-family:'JetBrains Mono',monospace; font-size:0.8rem; font-weight:600;
+        text-align:center; border:1px solid #2D2D3E; transition:all 0.2s;
+        background:#0F0F1A; color:#475569;
+    }
+    .mode-btn.active { background:#1E1E2E; color:#A78BFA; border-color:#7C3AED; }
+    </style>
+    """, unsafe_allow_html=True)
 
+    if "input_mode" not in st.session_state:
+        st.session_state.input_mode = "text"
+
+    col_tm, col_vm, col_sp = st.columns([1, 1, 5])
+    with col_tm:
+        if st.button("⌨️  Text Mode",
+                     type="primary" if st.session_state.input_mode == "text" else "secondary",
+                     use_container_width=True, key="btn_textmode"):
+            st.session_state.input_mode = "text"
+            st.session_state.voice_transcript = ""
+            st.rerun()
+    with col_vm:
+        if st.button("🎤  Voice Mode",
+                     type="primary" if st.session_state.input_mode == "voice" else "secondary",
+                     use_container_width=True, key="btn_voicemode"):
+            st.session_state.input_mode = "voice"
+            st.rerun()
+
+    answer = None
+
+    # ── TEXT MODE ─────────────────────────────────────────────────────────
+    if st.session_state.input_mode == "text":
+        answer = st.chat_input("Your answer...")
+
+    # ── VOICE MODE ────────────────────────────────────────────────────────
+    else:
+        from audio_recorder_streamlit import audio_recorder
+        from groq import Groq
+
+        groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+        st.markdown("""
+        <div class="ares-card" style="text-align:center; padding:2rem 1rem;">
+            <div style="color:#475569; font-size:0.75rem; font-family:'JetBrains Mono',monospace;
+                        text-transform:uppercase; letter-spacing:0.12em; margin-bottom:1.2rem;">
+                Click mic to start · click again to stop
+            </div>
+        """, unsafe_allow_html=True)
+
+        audio_bytes = audio_recorder(
+            text="",
+            recording_color="#7C3AED",
+            neutral_color="#334155",
+            icon_size="3x",
+            pause_threshold=120.0,          # ← won't auto-stop for 2 mins
+            sample_rate=16000,
+            key=f"recorder_{interview_state.turn}"
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # Show persistent transcription errors
+        if st.session_state.get("transcribe_error"):
+            st.error(st.session_state.transcribe_error)
+
+        # Only transcribe fresh audio (use hash to detect new recording)
+        if audio_bytes:
+            audio_hash = hash(audio_bytes)
+            if audio_hash != st.session_state.get("last_audio_hash"):
+                st.session_state.last_audio_hash = audio_hash
+                st.session_state.transcribe_error = None
+                with st.spinner("Transcribing..."):
+                    try:
+                        result = groq_client.audio.transcriptions.create(
+                            file=("recording.wav", audio_bytes),
+                            model="whisper-large-v3",
+                            response_format="text"
+                        )
+                        st.session_state.voice_transcript = str(result).strip()
+                        st.rerun()
+                    except Exception as e:
+                        st.session_state.transcribe_error = f"Transcription failed: {e}"
+                        st.rerun()
+
+        if st.session_state.get("voice_transcript"):
+            st.markdown('<div class="section-title">📝 Transcript — review before submitting</div>',
+                        unsafe_allow_html=True)
+            edited = st.text_area(
+                "",
+                value=st.session_state.voice_transcript,
+                height=120,
+                key=f"transcript_edit_{interview_state.turn}",
+                label_visibility="collapsed"
+            )
+            col_clr, col_sub = st.columns([1, 4])
+            with col_clr:
+                if st.button("🗑️ Clear", key=f"clr_{interview_state.turn}",
+                             use_container_width=True):
+                    st.session_state.voice_transcript = ""
+                    # st.session_state.last_audio_hash = None
+                    st.rerun()
+            with col_sub:
+                if st.button("Submit Answer →", type="primary",
+                             key=f"sub_{interview_state.turn}",
+                             use_container_width=True):
+                    answer = edited.strip() or None
+                    if answer:
+                        st.session_state.voice_transcript = ""
+                        st.session_state.last_audio_hash = None
+        else:
+            st.markdown(
+                '<p style="text-align:center; color:#334155; font-size:0.85rem; '
+                'margin-top:0.5rem;">Record above · after clearing, record again for new transcript</p>',
+                unsafe_allow_html=True
+            )
+
+    # ── EVALUATION (same for both modes) ──────────────────────────────────
     if answer:
         st.session_state.current_hint = None
 
@@ -675,7 +792,6 @@ if uploaded_file:
 
         interview_state.record(st.session_state.current_question, answer, evaluation)
 
-        # Skill rotation
         questions_on_skill = sum(
             1 for t in interview_state.history
             if t.get("skill") == interview_state.current_skill
@@ -689,9 +805,8 @@ if uploaded_file:
 
         interview_state.depth_level = decide_next_level(interview_state.depth_level, quality)
 
-        # Follow-up or next question
         missing_concepts = evaluation.get("concepts", {}).get("missing", [])
-        followup         = None
+        followup = None
         if missing_concepts and quality != "strong":
             from resume_engine.questions import generate_followup
             followup = generate_followup(
@@ -705,5 +820,4 @@ if uploaded_file:
             st.session_state.get("jd_text"),
             st.session_state.get("persona")
         )
-
         st.rerun()
