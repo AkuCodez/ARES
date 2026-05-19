@@ -155,6 +155,9 @@ def _extract_jd_skills(jd_text: str) -> list:
         return []
 
 def _build_resume_context(skill: str, profile: Optional[dict], jd_text=None) -> str:
+    if profile is not None and not isinstance(profile, dict):
+        profile = vars(profile)
+        
     if not profile:
         return f"Skill being tested: {skill}\nNo resume context available."
 

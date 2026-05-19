@@ -12,6 +12,7 @@ from resume_engine.policy import decide_next_level
 from resume_engine.models import InterviewState
 from resume_engine.anticheat import detect_cheating
 from resume_engine.skill_gaps import generate_skill_gaps
+from resume_engine.sharecard import save_result, fetch_result
 
 # ── CONFIG ────────────────────────────────────────────────────────────────
 MAX_QUESTIONS = 6
@@ -39,8 +40,8 @@ html, body, [class*="css"] {
 }
 
 /* ── Hide streamlit chrome ── */
-#MainMenu, footer, header { visibility: hidden; }
-.block-container { padding-top: 2rem !important; max-width: 1100px !important; }
+#MainMenu, footer { visibility: hidden; }
+[data-testid="stSidebarCollapseButton"] { visibility: visible !important; }.block-container { padding-top: 2rem !important; max-width: 1100px !important; }
 
 /* ── Hero header ── */
 .ares-header {
@@ -292,6 +293,67 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ── SHARED RESULT VIEW (read-only) ────────────────────────────────────────
+try:
+    _result_id = st.query_params["result"]
+except (KeyError, AttributeError, Exception):
+    _result_id = None
+
+if _result_id:
+    data = fetch_result(_result_id)
+    if data:
+        st.markdown("### 📊 Shared Interview Result")
+        
+        # Verdict counts
+        vc = data.get("verdict_counts", {})
+        col1, col2, col3 = st.columns(3)
+        with col1: st.metric("✅ Strong", vc.get("strong", 0))
+        with col2: st.metric("~ Okay",   vc.get("okay", 0))
+        with col3: st.metric("✗ Weak",   vc.get("weak", 0))
+
+        st.divider()
+
+        # Skills tested
+        skills = data.get("skills", [])
+        st.markdown('<div class="section-title">Skills Tested</div>', unsafe_allow_html=True)
+        st.markdown("".join(f'<span class="skill-chip">{s}</span>' for s in skills),
+                    unsafe_allow_html=True)
+
+        st.divider()
+
+        # Q&A review
+        st.markdown('<div class="section-title">Answer Review</div>', unsafe_allow_html=True)
+        for i, turn in enumerate(data.get("history", []), 1):
+            q = turn.get("quality", {})
+            v = q.get("quality", "weak").lower()
+            color = {"strong":"#34D399","okay":"#FCD34D","weak":"#FCA5A5"}.get(v,"#94A3B8")
+            with st.expander(f"Q{i} · {turn.get('skill','')} — {v.upper()}"):
+                st.markdown(f"**Question:** {turn['question']}")
+                st.markdown(f"**Answer:** {turn['answer']}")
+                st.markdown(f'<div style="color:{color}">{q.get("feedback","")}</div>',
+                            unsafe_allow_html=True)
+                scores = q.get("scores", {})
+                if scores:
+                    c1,c2,c3 = st.columns(3)
+                    with c1: st.metric("Correctness", f"{scores.get('correctness',0)}/10")
+                    with c2: st.metric("Depth",       f"{scores.get('depth',0)}/10")
+                    with c3: st.metric("Clarity",     f"{scores.get('clarity',0)}/10")
+
+        # Gaps
+        gaps = data.get("gaps", [])
+        if gaps:
+            st.divider()
+            st.markdown('<div class="section-title">Study Recommendations</div>',
+                        unsafe_allow_html=True)
+            for gap in gaps:
+                p = gap.get("priority","medium")
+                with st.expander(f"{gap['topic']} — {p.upper()}"):
+                    st.markdown(f"**Why:** {gap.get('reason','')}")
+                    st.markdown(f"**Focus:** {gap.get('what_to_learn','')}")
+                    st.markdown(f"📖 [{gap.get('resource_name','')}]({gap.get('resource_url','#')})")
+    else:
+        st.error(f"Result not found: `{_result_id}`")
+    st.stop()
 
 # ── HELPERS ───────────────────────────────────────────────────────────────
 
@@ -442,6 +504,60 @@ with col_p:
     st.markdown(f'<span class="skill-chip">{st.session_state.persona}</span>',
                 unsafe_allow_html=True)
 
+# ── SIDEBAR ───────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown('<div class="section-title">Session</div>', unsafe_allow_html=True)
+    st.markdown(f'<span class="skill-chip">{st.session_state.persona}</span><br><br>',
+                unsafe_allow_html=True)
+
+    if "profile" in st.session_state and "interview_state" in st.session_state:
+        _state = st.session_state.interview_state
+        _turn  = len(_state.history)
+
+        st.markdown('<div class="section-title">Progress</div>', unsafe_allow_html=True)
+        st.progress(min(_turn / MAX_QUESTIONS, 1.0),
+                    text=f"{_turn}/{MAX_QUESTIONS} questions")
+
+        st.markdown('<div class="section-title" style="margin-top:1rem;">Current Skill</div>',
+                    unsafe_allow_html=True)
+        st.markdown(
+            f'<span class="skill-chip" style="color:#A78BFA;border-color:#7C3AED;">'
+            f'{_state.current_skill}</span>'
+            f'<div style="font-size:0.7rem;color:#475569;margin-top:0.4rem;">'
+            f'Depth {_state.depth_level}/3</div>',
+            unsafe_allow_html=True)
+
+        st.markdown('<div class="section-title" style="margin-top:1rem;">Skill Queue</div>',
+                    unsafe_allow_html=True)
+        for s in _state.skill_queue:
+            active = s == _state.current_skill
+            style  = "color:#A78BFA;border-color:#7C3AED;" if active else ""
+            st.markdown(f'<span class="skill-chip" style="{style}">{s}</span>',
+                        unsafe_allow_html=True)
+
+        if _turn > 0:
+            vc = _state.verdict_counts
+            st.markdown('<div class="section-title" style="margin-top:1rem;">Score</div>',
+                        unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="ares-card" style="padding:0.75rem;">
+                <div style="font-size:0.75rem;display:flex;flex-direction:column;gap:4px;">
+                    <span style="color:#34D399;">✓ {vc.get('strong',0)} strong</span>
+                    <span style="color:#FCD34D;">~ {vc.get('okay',0)} okay</span>
+                    <span style="color:#FCA5A5;">✗ {vc.get('weak',0)} weak</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Session</div>', unsafe_allow_html=True)
+        if st.button("↺ Restart Interview", use_container_width=True):
+            for key in ["profile","interview_state","current_question",
+                        "current_hint","hint_used","interview_complete",
+                        "voice_transcript","last_audio_hash","transcribe_error",
+                        "input_mode","recording","jd_text"]:
+                st.session_state.pop(key, None)
+            st.rerun()
 
 # ── FILE UPLOAD ───────────────────────────────────────────────────────────
 st.markdown('<div class="section-title">Upload Resume</div>', unsafe_allow_html=True)
@@ -567,6 +683,37 @@ if uploaded_file:
 
         st.markdown("<br>", unsafe_allow_html=True)
 
+        # ── Q&A Review ────────────────────────────────────────────────────
+        st.markdown('<div class="section-title">Answer Review</div>',
+                    unsafe_allow_html=True)
+        for i, turn in enumerate(history, 1):
+            q = turn["quality"]
+            v = q["quality"].lower()
+            color = {"strong":"#34D399","okay":"#FCD34D","weak":"#FCA5A5"}.get(v,"#94A3B8")
+            with st.expander(
+                f"Q{i} · {turn.get('skill','')} — {v.upper()}",
+                expanded=False
+            ):
+                st.markdown(f"**Question:** {turn['question']}")
+                st.markdown(f"**Your Answer:** {turn['answer']}")
+                st.markdown(
+                    f'<div style="font-size:0.82rem;color:{color}; margin-top:0.4rem;">'
+                    f'{q["feedback"]}</div>',
+                    unsafe_allow_html=True)
+                scores = q.get("scores", {})
+                if scores:
+                    c1, c2, c3 = st.columns(3)
+                    with c1: st.metric("Correctness", f"{scores.get('correctness',0)}/10")
+                    with c2: st.metric("Depth",       f"{scores.get('depth',0)}/10")
+                    with c3: st.metric("Clarity",     f"{scores.get('clarity',0)}/10")
+                concepts = q.get("concepts", {})
+                if concepts.get("mentioned"):
+                    st.caption("✓ Covered: " + ", ".join(concepts["mentioned"]))
+                if concepts.get("missing"):
+                    st.caption("✗ Missed: " + ", ".join(concepts["missing"]))
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
         # ── Study recommendations ─────────────────────────────────────────
         st.markdown('<div class="section-title">📚 Personalized Study Plan</div>',
                     unsafe_allow_html=True)
@@ -574,6 +721,16 @@ if uploaded_file:
             gaps = generate_skill_gaps(history, vars(profile))
         interview_state.gaps = gaps
 
+        # ── SHAREABLE LINK ────────────────────────────────────────────────────────
+        if "share_uuid" not in st.session_state:
+            with st.spinner("Saving result..."):
+                uuid = save_result(profile, interview_state, gaps)
+                st.session_state.share_uuid = uuid
+
+        share_url = f"https://ares-interview-prep.streamlit.app//?result={st.session_state.share_uuid}"
+        st.markdown(f"🔗 **Shareable link:** [`{share_url}`]({share_url})")
+        st.code(share_url)
+        
         _PRIORITY_CONFIG = {
             "high":   ("🔴 High Priority",   "gap-high"),
             "medium": ("🟡 Medium Priority", "gap-medium"),

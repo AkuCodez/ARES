@@ -11,3 +11,4 @@ reportlab
 streamlit-javascript
 audio-recorder-streamlit
 groq
+supabase
